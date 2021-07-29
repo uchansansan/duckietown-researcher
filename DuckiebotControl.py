@@ -2,7 +2,7 @@ import numpy as np
 
 
 class DuckiebotControl:
-    k_p = 2.1
+    k_p = 2.11
     k_r = 6.0
     k_d = 2.6
     k_a = 2.6
