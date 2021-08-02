@@ -11,6 +11,15 @@ class Direction(IntEnum):
     UP    = 2
     RIGHT = 3
 
+    def get_normalized(self):
+        horizontal = self.value % 2  == 0
+        positive   = self.value // 2 == 1
+        if positive:
+            return np.array([ 0,  1]) if horizontal else np.array([ 1,  0])
+        return np.array([ 0,  -1]) if horizontal else np.array([ -1,  0])
+        
+    def invert(self):
+        return Direction( self.value + Direction.UP )
     def __add__(self, a):
         return Direction( (a.value + self.value) % 4 )
     def __sub__(self, a):
@@ -18,14 +27,14 @@ class Direction(IntEnum):
 
 class BarcodeClassifier:
     PATHS = {
-        1: (Direction.DOWN),
+        1: tuple([Direction.DOWN]),
 
-        5: (Direction.DOWN,
+        8: (Direction.DOWN,
             Direction.LEFT,
             Direction.UP,
             Direction.RIGHT),
 
-        8: (Direction.DOWN),
+        5: tuple([Direction.DOWN]),
 
         9: (Direction.DOWN,
             Direction.UP,
@@ -41,9 +50,23 @@ class BarcodeClassifier:
     }
 
     def __init__(self):
-        self._aruco_dict       = aruco.Dictionary_get(20)
+        self._aruco_dict       = aruco.Dictionary_get(aruco.DICT_APRILTAG_36h11)
         self._aruco_parameters = aruco.DetectorParameters_create()
         self._aruco_parameters.minDistanceToBorder = 0
+
+        self._dilate_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+        self._erode_kernel  = np.ones((3, 3), np.uint8)
+
+        self._window_metrics   = (640, 480)
+
+        self._red_window_lower = (120, 360)
+        self._red_window_bound = (
+            (self._red_window_lower[0], self._red_window_lower[1]), 
+            (self._window_metrics[0] - self._red_window_lower[0], self._window_metrics[1]))
+ 
+        self._hsv_red_bounds = (
+            (np.array([0,   100, 100]), np.array([15,  255, 255])),
+            (np.array([165, 100, 100]), np.array([180, 255, 255])))
 
         self.show_markers = False
         self.show_lines   = False
@@ -56,13 +79,8 @@ class BarcodeClassifier:
         self._gray = None
         self._hsv  = None
 
-        self._hsv_red_bounds = ((np.array([0,   100, 100]), np.array([15,  255, 255])),
-                                (np.array([165, 100, 100]), np.array([180, 255, 255])))
-        self._dilate_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-        self._erode_kernel  = np.ones((3, 3), np.uint8)
-
         self.red_line_detected = False
-        self.red_lines_pos = None
+        self.red_lines_pos     = None
 
 
     def _aruco_show_detected_markers(self):        
@@ -86,13 +104,22 @@ class BarcodeClassifier:
     def _cv_show_detected_redlines(self):
         if self.observation is None:
             raise AttributeError("observation is None")
+        
+        cv2.rectangle(self.observation, self._red_window_bound[0], self._red_window_bound[1], color=(255, 0, 0), thickness=1)
+        
         if self.red_lines_pos is None:
             return
 
         if len(self.red_lines_pos) > 0:
             for line in self.red_lines_pos:
                 for x1,y1,x2,y2 in line:
-                    cv2.line(self.observation,   (x1,y1), (x2,y2), (0,     0, 255), 2)
+                    x_lower_bound = self._red_window_bound[0][0]
+                    y_lower_bound = self._red_window_bound[0][1]
+                    x1 += x_lower_bound
+                    x2 += x_lower_bound
+                    y1 += y_lower_bound
+                    y2 += y_lower_bound
+                    cv2.line(self.observation,   (x1,y1), (x2,y2), (0,     0, 255), thickness=2)
                     cv2.circle(self.observation, (x1,y1),       2, (0,   255,   0))
                     cv2.circle(self.observation, (x2,y2),       2, (255,   0,   0))
 
@@ -102,17 +129,20 @@ class BarcodeClassifier:
         if self._gray is None:
             raise AttributeError("gray filtered observation is None. Check convertion parametres")
         
-        red1 = cv2.inRange(self._hsv, *self._hsv_red_bounds[0])
-        red2 = cv2.inRange(self._hsv, *self._hsv_red_bounds[1])
+        rwb = self._red_window_bound
+
+        hsv_windowed  = self._hsv[rwb[0][1]:rwb[1][1], rwb[0][0]:rwb[1][0]]
+        # cv2.imshow("windowed", hsv_windowed)
+        gray_windowed = self._gray[rwb[0][1]:rwb[1][1], rwb[0][0]:rwb[1][0]]
+
+        red1 = cv2.inRange(hsv_windowed, *self._hsv_red_bounds[0])
+        red2 = cv2.inRange(hsv_windowed, *self._hsv_red_bounds[1])
         red  = cv2.bitwise_or(red1, red2)
-        red[:240,:] = 0
-        red[:,-120:] = 0
-        red[:,:120] = 0
         red  = cv2.dilate(red, self._dilate_kernel)
 
         # cv2.imshow("red_bitwise", red)
 
-        edges = cv2.Canny(self._gray, 100, 350)
+        edges = cv2.Canny(gray_windowed, 100, 350)
         # cv2.imshow("Canny", edges)
 
         edge_color_red=cv2.bitwise_and(edges, red)
@@ -138,7 +168,7 @@ class BarcodeClassifier:
         
         heading = Direction(int(np.floor((heading + 45)%360 / 90)))
 
-        return [path - heading + Direction.UP for path in BarcodeClassifier.PATHS[max(self.ids[0])]]
+        return [path - heading for path in BarcodeClassifier.PATHS[max(self.ids[0])]]
 
     def update(self, observation):
         if observation is None:
@@ -171,7 +201,7 @@ if __name__ == "__main__":
     while True:
         # success, img = cap.read()
 
-        img = cv2.imread("screen.png")
+        img = cv2.imread("screen1.png")
 
         # bc.thresh_lower_bound = cv2.getTrackbarPos('lowb','threshold')
 
@@ -179,7 +209,9 @@ if __name__ == "__main__":
 
         bc.show_observation()
 
-        print(*bc.get_paths(0))
+        paths = bc.get_paths(0)
+        if len(paths) > 0:
+            print(*paths)
 
         if cv2.waitKey(1) == 27:
             break
