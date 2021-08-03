@@ -184,6 +184,8 @@ def update(dt):
 
     barcode.update(cv2.cvtColor(obs, cv2.COLOR_RGB2BGR))
     barcode.show_observation()
+    if mapbuilder.state.value == 2:
+        GUI.draw_graph()
     cv2.waitKey(1)
 
     if barcode.red_line_detected:
@@ -191,13 +193,11 @@ def update(dt):
         if len(abs_paths) > 0:
             y, _, x = env.cur_pos
             path = mapbuilder.update(abs_paths, np.array([x, y], dtype=np.float64), Direction.direction_from_radians(-env.cur_angle + np.pi))
-            print("====================")
             print(path)
-            print("====================")
-            print(str(mapbuilder))
-            print("====================")
-            print(env.cur_pos)
-            print(mapbuilder.get_nodes_locations())
+            if mapbuilder.state.value == 2:
+                GUI.update_graph(mapbuilder.road_map)
+            # print(str(mapbuilder))
+            # print(mapbuilder.get_nodes_locations())
             duckiebot.way(path)
 
 
