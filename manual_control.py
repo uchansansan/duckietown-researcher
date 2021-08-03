@@ -1,10 +1,5 @@
 #!/usr/bin/env python
 # manual
-
-"""
-This script allows you to manually control the simulator or Duckiebot
-using the keyboard arrows.
-"""
 from PIL import Image
 import argparse
 import sys
@@ -13,7 +8,6 @@ from researcher.duckiebot_control import DuckiebotControl
 from researcher.barcode_classifier import BarcodeClassifier
 from researcher.map_builder import MapBuilder
 from researcher.gui import GUI
-
 
 from cv2 import aruco
 import turtle  # ya sosu bibu
@@ -92,38 +86,17 @@ env.unwrapped.window.push_handlers(key_handler)
 
 duckiebot = DuckiebotControl(args.frame_skip)
 
-barcode   = BarcodeClassifier()
+barcode = BarcodeClassifier(args.frame_skip)
 barcode.show_markers = True
-barcode.show_lines   = True
+barcode.show_lines = True
 
-mapbuilder= MapBuilder()
+mapbuilder = MapBuilder()
 mapbuilder.tile_size = 0.585
 mapbuilder.allowable_error = 0.3
 mapbuilder.hand_length = 1.8
 
-
-# turtle.left(90)
-# screen = turtle.Screen()
-# screen.title('Map')
-# turtle.pensize(1)
-#
-# start_angle = turtle.heading()
-# from_wierd2turtle = 1.1784411471630984
-# loop_count = 0
-
-# def ka(action):
-#     global from_wierd2turtle, bot_pos, bot_heading
-#     action *= args.frame_skip
-#     turtle.left(action[1]/from_wierd2turtle )
-#     turtle.forward(action[0])
-#     bot_pos = turtle.pos()
-#     bot_heading = turtle.heading()
-
-def tile_calculate(bot_pos):
-    pass
-
-
 GUI.frame_skip = args.frame_skip
+
 turtle.penup()
 
 def update(dt):
@@ -163,14 +136,11 @@ def update(dt):
     if key_handler[key.LSHIFT]:
         action *= 1.5
 
-
-
-
     lane_pose = env.get_lane_pos2(env.cur_pos, env.cur_angle)
     distance_to_road_center = lane_pose.dist
     angle_from_straight_in_rads = lane_pose.angle_rad
 
-    #print(f"{distance_to_road_center=}, {angle_from_straight_in_rads=}")
+    # print(f"{distance_to_road_center=}, {angle_from_straight_in_rads=}")
 
     global duckiebot, barcode, mapbuilder
     duckiebot.update(angle_from_straight_in_rads, distance_to_road_center)
@@ -184,22 +154,21 @@ def update(dt):
 
     barcode.update(cv2.cvtColor(obs, cv2.COLOR_RGB2BGR))
     barcode.show_observation()
-    if mapbuilder.state.value == 2:
+    if mapbuilder.state == MapBuilder.State.FINISHED:
         GUI.draw_graph()
     cv2.waitKey(1)
 
     if barcode.red_line_detected:
-        abs_paths = barcode.get_paths(env.cur_angle/np.pi*180)
+        abs_paths = barcode.get_paths(env.cur_angle / np.pi * 180)
         if len(abs_paths) > 0:
             y, _, x = env.cur_pos
-            path = mapbuilder.update(abs_paths, np.array([x, y], dtype=np.float64), Direction.direction_from_radians(-env.cur_angle + np.pi))
-            print(path)
-            if mapbuilder.state.value == 2:
-                GUI.update_graph(mapbuilder.road_map)
-            # print(str(mapbuilder))
-            # print(mapbuilder.get_nodes_locations())
-            duckiebot.way(path)
+            path, edge = mapbuilder.update(abs_paths, np.array([x, y], dtype=np.float64),
+                                           Direction.direction_from_radians(-env.cur_angle + np.pi))
+            print(f'{path.name=}, {edge=}')
+            if mapbuilder.state == MapBuilder.State.FINISHED:
+                GUI.update_graph(mapbuilder.road_map, edge)
 
+            duckiebot.way(path)
 
     if key_handler[key.RETURN]:
         im = Image.fromarray(obs)
