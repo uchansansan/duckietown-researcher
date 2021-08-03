@@ -1,5 +1,5 @@
 from enum import Flag
-from barcode_classifier import Direction
+from direction import Direction
 import numpy as np
 
 class BuilderState(Flag):
@@ -164,4 +164,3 @@ if __name__ == "__main__":
     mp.print_map()
 
     print(mp.get_nodes_locations())
-    print(mp._edges_count)
