@@ -8,10 +8,15 @@ using the keyboard arrows.
 from PIL import Image
 import argparse
 import sys
-from researcher.DuckiebotControl import DuckiebotControl
-from researcher.BarcodeClassifier import BarcodeClassifier
+from researcher.direction import Direction
+from researcher.duckiebot_control import DuckiebotControl
+from researcher.barcode_classifier import BarcodeClassifier
+from researcher.map_builder import MapBuilder
+from researcher.gui import GUI
+
+
 from cv2 import aruco
-import turtle#ya sosu bibu
+import turtle  # ya sosu bibu
 
 import cv2
 
@@ -85,28 +90,41 @@ def on_key_press(symbol, modifiers):
 key_handler = key.KeyStateHandler()
 env.unwrapped.window.push_handlers(key_handler)
 
-duckiebot = DuckiebotControl()
+duckiebot = DuckiebotControl(args.frame_skip)
+
 barcode   = BarcodeClassifier()
+barcode.show_markers = True
+barcode.show_lines   = True
 
-turtle.left(90)
-screen = turtle.Screen()
-screen.title('Map')
-turtle.pensize(1)
+mapbuilder= MapBuilder()
+mapbuilder.tile_size = 0.585
+mapbuilder.allowable_error = 0.3
+mapbuilder.hand_length = 1.8
 
-start_angle = turtle.heading()
-from_wierd2turtle = 1.1784411471630984
-loop_count = 0
 
-def ka(action):
-    global from_wierd2turtle, bot_pos, bot_heading
-    action *= args.frame_skip
-    turtle.left(action[1]/from_wierd2turtle )
-    turtle.forward(action[0])
-    bot_pos = turtle.pos()
-    bot_heading = turtle.heading()
+# turtle.left(90)
+# screen = turtle.Screen()
+# screen.title('Map')
+# turtle.pensize(1)
+#
+# start_angle = turtle.heading()
+# from_wierd2turtle = 1.1784411471630984
+# loop_count = 0
+
+# def ka(action):
+#     global from_wierd2turtle, bot_pos, bot_heading
+#     action *= args.frame_skip
+#     turtle.left(action[1]/from_wierd2turtle )
+#     turtle.forward(action[0])
+#     bot_pos = turtle.pos()
+#     bot_heading = turtle.heading()
 
 def tile_calculate(bot_pos):
     pass
+
+
+GUI.frame_skip = args.frame_skip
+turtle.penup()
 
 def update(dt):
     """
@@ -127,19 +145,7 @@ def update(dt):
     if key_handler[key.RIGHT]:
         action -= np.array([0, 1])
     if key_handler[key.SPACE]:
-        global start_angle, from_wierd2turtle, loop_count
-        loop_count += 1
-
-        cur_angle = turtle.heading()
-
-        absolute_deffect = 1 - (start_angle - cur_angle)/loop_count/360
-        fw2t = absolute_deffect * from_wierd2turtle
-
-        start_angle = cur_angle
-
-        from_wierd2turtle = fw2t
-        print(fw2t)
-        # action = np.array([0, 0])
+        action = np.array([0, 0])
 
     v1 = action[0]
     v2 = action[1]
@@ -166,24 +172,36 @@ def update(dt):
 
     #print(f"{distance_to_road_center=}, {angle_from_straight_in_rads=}")
 
-    global duckiebot, barcode
+    global duckiebot, barcode, mapbuilder
     duckiebot.update(angle_from_straight_in_rads, distance_to_road_center)
-    action = duckiebot.PID_action()
-
+    action = duckiebot.get_action()
 
     obs, reward, done, info = env.step(action)
-    #bot_pos = ()
-    ka(action)
 
+    GUI.draw_path_debug(env.cur_angle, env.cur_pos)
 
     # print("step_count = %s, reward=%.3f" % (env.unwrapped.step_count, reward))
 
     barcode.update(cv2.cvtColor(obs, cv2.COLOR_RGB2BGR))
+    barcode.show_observation()
+    cv2.waitKey(1)
 
-    print(*barcode.get_paths(env.cur_angle/np.pi*180 + 180))
+    if barcode.red_line_detected:
+        abs_paths = barcode.get_paths(env.cur_angle/np.pi*180)
+        if len(abs_paths) > 0:
+            y, _, x = env.cur_pos
+            path = mapbuilder.update(abs_paths, np.array([x, y], dtype=np.float64), Direction.direction_from_radians(-env.cur_angle + np.pi))
+            print("====================")
+            print(path)
+            print("====================")
+            print(str(mapbuilder))
+            print("====================")
+            print(env.cur_pos)
+            print(mapbuilder.get_nodes_locations())
+            duckiebot.way(path)
+
 
     if key_handler[key.RETURN]:
-
         im = Image.fromarray(obs)
 
         im.save("screen.png")
