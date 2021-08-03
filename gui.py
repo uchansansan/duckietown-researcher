@@ -17,7 +17,7 @@ class GUI:
     frame_skip = 1
     IMGNAME = "graph.png"
 
-    def update_graph(tiles):
+    def update_graph(tiles, cur_edge):
         g = nx.MultiGraph()
         nodes = tiles.keys()
         g.add_nodes_from(nodes)
@@ -28,7 +28,11 @@ class GUI:
                 for info in tiles[node][direction]:
                     if info == 'edge' and tiles[node][direction][info] not in ids:
                         ids.append(tiles[node][direction][info])
-                        g.add_edge(node, tiles[node][direction]['vertex'], data=str(tiles[node][direction][info]),
+                        if cur_edge == tiles[node][direction][info]:
+                            g.add_edge(node, tiles[node][direction]['vertex'], data=str(tiles[node][direction][info]),
+                                       color="red")
+                        else:
+                            g.add_edge(node, tiles[node][direction]['vertex'], data=str(tiles[node][direction][info]),
                                    color="blue")
 
         A = nx.nx_agraph.to_agraph(g)
