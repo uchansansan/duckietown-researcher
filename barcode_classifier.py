@@ -1,33 +1,9 @@
 #!/usr/bin/python3
-from enum import IntEnum
+from direction import Direction
 
 import numpy as np
 import cv2
 import cv2.aruco as aruco
-
-class Direction(IntEnum):
-    DOWN  = 0
-    LEFT  = 1
-    UP    = 2
-    RIGHT = 3
-
-    def towards(self, direction):
-        if not isinstance(direction, Direction):
-            raise ValueError("direction meant to have a Direction type")
-        return Direction( self.value + direction.value + Direction.UP )
-    def get_normalized(self):
-        horizontal = self.value % 2  == 0
-        positive   = self.value // 2 == 1
-        if positive:
-            return np.array([ 0,  1]) if horizontal else np.array([ 1,  0])
-        else:
-            return np.array([ 0, -1]) if horizontal else np.array([-1,  0])
-    def invert(self):
-        return Direction( self.value + Direction.UP )
-    def __add__(self, a):
-        return Direction( (a.value + self.value) % 4 )
-    def __sub__(self, a):
-        return Direction( (self.value - a.value) % 4 )
 
 class BarcodeClassifier:
     PATHS = {
@@ -78,10 +54,11 @@ class BarcodeClassifier:
 
         self.show_markers = False
         self.show_lines   = False
+        self.bbox_delete  = True
 
         self.observation = None
         self.bbox        = None
-        self._ids = []
+        self._ids        = []
         self.rejected    = None
 
         self._gray = None
@@ -99,6 +76,9 @@ class BarcodeClassifier:
             # raise AttributeError("boundary box is None")
 
         aruco.drawDetectedMarkers(self.observation, self.bbox)
+        
+        if self.bbox_delete:
+            self.bbox = None
 
     def _aruco_detect_markers(self):
         if self.observation is None:
