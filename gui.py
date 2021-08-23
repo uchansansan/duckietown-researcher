@@ -9,11 +9,11 @@ import cv2
 
 
 class GUI:
-    turtle.left(90)
-    screen = turtle.Screen()
-    screen.setup(800, 800)
-    screen.title('Map')
-    turtle.pensize(1)
+    #turtle.left(90)
+    #screen = turtle.Screen()
+    #screen.setup(800, 800)
+    #screen.title('Map')
+    #turtle.pensize(1)
     frame_skip = 1
     IMGNAME = "graph.png"
 
