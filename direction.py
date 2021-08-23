@@ -8,6 +8,9 @@ class Direction(IntEnum):
     UP    = 2
     RIGHT = 3
 
+    def direction_from_radians(rads):
+        rads *= 180/np.pi
+        return Direction(int(rads + 45)%360//90)
     def towards(self, direction):
         if not isinstance(direction, Direction):
             raise ValueError("direction meant to have a Direction type")
