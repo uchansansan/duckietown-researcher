@@ -7,7 +7,10 @@ from researcher.direction import Direction
 from researcher.duckiebot_control import DuckiebotControl
 from researcher.barcode_classifier import BarcodeClassifier
 from researcher.map_builder import MapBuilder
-from researcher.gui import GUI
+import networkx.drawing.nx_pydot
+import pygraphviz
+import networkx as nx
+from tkinter import *
 
 from cv2 import aruco
 import turtle  # ya sosu bibu
@@ -95,9 +98,68 @@ mapbuilder.tile_size = 0.585
 mapbuilder.allowable_error = 0.3
 mapbuilder.hand_length = 1.8
 
-GUI.frame_skip = args.frame_skip
 
-turtle.penup()
+
+#frame_skip = args.frame_skip
+
+screen = turtle.Screen()
+print(screen)
+screen.setup(800, 800)
+screen.title('Map')
+turtle.left(90)
+turtle.pensize(1)
+frame_skip = 1
+IMGNAME = "graph.png"
+# turtle.penup()
+
+def update_graph(tiles, cur_edge):
+    g = nx.MultiGraph()
+    nodes = tiles.keys()
+    g.add_nodes_from(nodes)
+    ids = []
+
+    for node in nodes:
+        for direction in tiles[node]:
+            for info in tiles[node][direction]:
+                if info == 'edge' and tiles[node][direction][info] not in ids:
+                    ids.append(tiles[node][direction][info])
+                    if cur_edge == tiles[node][direction][info]:
+                        g.add_edge(node, tiles[node][direction]['vertex'], data=str(tiles[node][direction][info]),
+                                   color="red")
+                    else:
+                        g.add_edge(node, tiles[node][direction]['vertex'], data=str(tiles[node][direction][info]),
+                                   color="blue")
+
+    A = nx.nx_agraph.to_agraph(g)
+    A.draw(IMGNAME, prog="neato")  # "neato", "dot", "twopi", "circo", "fdp", "nop"
+
+
+def draw_path_debug(angle, pos):
+    turtle.pendown()
+    x, _, y = pos * 50
+    turtle.setheading(-angle * 180 / np.pi)
+    turtle.setpos((float(x), float(y)))
+
+
+def draw_path(action):
+    """
+    This function draw the path of a DuckieBot in a new screen
+    :return:
+    """
+    global frame_skip
+    from_wierd2turtle = 1.1784411471630984  # magic constant
+    action *= frame_skip
+    turtle.left(action[1] / from_wierd2turtle)
+    turtle.forward(action[0])
+    bot_pos = turtle.pos()
+    bot_heading = turtle.heading()
+    return bot_pos, bot_heading
+
+
+def draw_graph(g=None):
+    img = cv2.imread(IMGNAME)
+    cv2.imshow(IMGNAME, img)
+
 
 def update(dt):
     """
@@ -143,19 +205,19 @@ def update(dt):
     # print(f"{distance_to_road_center=}, {angle_from_straight_in_rads=}")
 
     global duckiebot, barcode, mapbuilder
-    duckiebot.update(angle_from_straight_in_rads, distance_to_road_center)
+    duckiebot.update(angle_from_straight_in_rads, distance_to_road_center + 0.05)
     action = duckiebot.get_action()
 
     obs, reward, done, info = env.step(action)
 
-    GUI.draw_path_debug(env.cur_angle, env.cur_pos)
+    draw_path_debug(env.cur_angle, env.cur_pos)
 
     # print("step_count = %s, reward=%.3f" % (env.unwrapped.step_count, reward))
 
     barcode.update(cv2.cvtColor(obs, cv2.COLOR_RGB2BGR))
     barcode.show_observation()
     if mapbuilder.state == MapBuilder.State.FINISHED:
-        GUI.draw_graph()
+       draw_graph()
     cv2.waitKey(1)
 
     if barcode.red_line_detected:
@@ -165,8 +227,9 @@ def update(dt):
             path, edge = mapbuilder.update(abs_paths, np.array([x, y], dtype=np.float64),
                                            Direction.direction_from_radians(-env.cur_angle + np.pi))
             print(f'{path.name=}, {edge=}')
+            print(mapbuilder)
             if mapbuilder.state == MapBuilder.State.FINISHED:
-                GUI.update_graph(mapbuilder.road_map, edge)
+               update_graph(mapbuilder.road_map, edge)
 
             duckiebot.way(path)
 
@@ -179,7 +242,7 @@ def update(dt):
         print("done!")
         env.reset()
         env.render()
-
+    screen.update()
     env.render()
 
 
@@ -187,5 +250,5 @@ pyglet.clock.schedule_interval(update, 1.0 / env.unwrapped.frame_rate)
 
 # Enter main event loop
 pyglet.app.run()
-
+screen.mainloop()
 env.close()
