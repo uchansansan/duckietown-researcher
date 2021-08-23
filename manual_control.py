@@ -7,14 +7,11 @@ from researcher.direction import Direction
 from researcher.duckiebot_control import DuckiebotControl
 from researcher.barcode_classifier import BarcodeClassifier
 from researcher.map_builder import MapBuilder
-import networkx.drawing.nx_pydot
-import pygraphviz
-import networkx as nx
-from tkinter import *
+#from researcher.gui import GUI
 
 from cv2 import aruco
 import turtle  # ya sosu bibu
-
+import networkx as nx
 import cv2
 
 import gym
@@ -98,19 +95,18 @@ mapbuilder.tile_size = 0.585
 mapbuilder.allowable_error = 0.3
 mapbuilder.hand_length = 1.8
 
+frame_skip = args.frame_skip
 
-
-#frame_skip = args.frame_skip
-
+turtle.hideturtle()
+turtle.penup()
 screen = turtle.Screen()
-print(screen)
-screen.setup(800, 800)
+
+screen.setup(500, 500)
 screen.title('Map')
 turtle.left(90)
 turtle.pensize(1)
 frame_skip = 1
 IMGNAME = "graph.png"
-# turtle.penup()
 
 def update_graph(tiles, cur_edge):
     g = nx.MultiGraph()
@@ -135,6 +131,7 @@ def update_graph(tiles, cur_edge):
 
 
 def draw_path_debug(angle, pos):
+    turtle.showturtle()
     turtle.pendown()
     x, _, y = pos * 50
     turtle.setheading(-angle * 180 / np.pi)
@@ -146,6 +143,7 @@ def draw_path(action):
     This function draw the path of a DuckieBot in a new screen
     :return:
     """
+    turtle.showturtle()
     global frame_skip
     from_wierd2turtle = 1.1784411471630984  # magic constant
     action *= frame_skip
@@ -205,7 +203,7 @@ def update(dt):
     # print(f"{distance_to_road_center=}, {angle_from_straight_in_rads=}")
 
     global duckiebot, barcode, mapbuilder
-    duckiebot.update(angle_from_straight_in_rads, distance_to_road_center + 0.05)
+    duckiebot.update(angle_from_straight_in_rads, distance_to_road_center)
     action = duckiebot.get_action()
 
     obs, reward, done, info = env.step(action)
@@ -217,7 +215,7 @@ def update(dt):
     barcode.update(cv2.cvtColor(obs, cv2.COLOR_RGB2BGR))
     barcode.show_observation()
     if mapbuilder.state == MapBuilder.State.FINISHED:
-       draw_graph()
+        draw_graph()
     cv2.waitKey(1)
 
     if barcode.red_line_detected:
@@ -226,10 +224,9 @@ def update(dt):
             y, _, x = env.cur_pos
             path, edge = mapbuilder.update(abs_paths, np.array([x, y], dtype=np.float64),
                                            Direction.direction_from_radians(-env.cur_angle + np.pi))
-            print(f'{path.name=}, {edge=}')
-            print(mapbuilder)
+            #print(f'{path.name=}, {edge=}')
             if mapbuilder.state == MapBuilder.State.FINISHED:
-               update_graph(mapbuilder.road_map, edge)
+                update_graph(mapbuilder.road_map, edge)
 
             duckiebot.way(path)
 
@@ -242,7 +239,7 @@ def update(dt):
         print("done!")
         env.reset()
         env.render()
-    screen.update()
+
     env.render()
 
 
@@ -250,5 +247,5 @@ pyglet.clock.schedule_interval(update, 1.0 / env.unwrapped.frame_rate)
 
 # Enter main event loop
 pyglet.app.run()
-screen.mainloop()
+
 env.close()
